@@ -12,18 +12,30 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      CXX: clang++-9
-      CLANG_FORMAT: clang-format-9
+      CXX: clang++-12
+      CLANG_FORMAT: clang-format-12
 
     steps:
-    - uses: actions/checkout@v2.2.0
+    - uses: actions/checkout@v2
     - name: install ninja
       run: |
         mkdir -p ${GITHUB_WORKSPACE}/ninja-bin; cd ${GITHUB_WORKSPACE}/ninja-bin
-        wget https://github.com/ninja-build/ninja/releases/download/v1.9.0/ninja-linux.zip
+        wget https://github.com/ninja-build/ninja/releases/download/v1.10.2/ninja-linux.zip
         unzip ninja-linux.zip
         rm ninja-linux.zip
-        echo "::add-path::${GITHUB_WORKSPACE}/ninja-bin"
+        echo "${GITHUB_WORKSPACE}/ninja-bin" >> "$GITHUB_PATH"
+    - name: install GNU Make
+      run: |
+        mkdir -p ${GITHUB_WORKSPACE}/make-bin/tmp; cd ${GITHUB_WORKSPACE}/make-bin/tmp
+        wget http://mirrors.kernel.org/ubuntu/pool/main/m/make-dfsg/make_4.2.1-1.2_amd64.deb
+        ar xv make_4.2.1-1.2_amd64.deb
+        tar xf data.tar.xz
+        mv usr/bin/make ../
+        cd ..
+        rm -rf tmp/
+        echo "${GITHUB_WORKSPACE}/make-bin" >> "$GITHUB_PATH"
+    - name: make info
+      run: make info
     - name: make
       run: make -j4 ckati ckati_tests
     - name: clang format

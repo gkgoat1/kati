@@ -193,22 +193,15 @@ class Symtab {
 #endif
 };
 
-static Symtab* g_symtab;
-
-void InitSymtab() {
-  g_symtab = new Symtab;
-}
-
-void QuitSymtab() {
-  delete g_symtab;
-}
+static Symtab g_symtab;
 
 Symbol Intern(StringPiece s) {
-  return g_symtab->Intern(s);
+  return g_symtab.Intern(s);
 }
 
 string JoinSymbols(const vector<Symbol>& syms, const char* sep) {
   vector<string> strs;
+  strs.reserve(syms.size());
   for (Symbol s : syms) {
     strs.push_back(s.str());
   }
@@ -216,5 +209,5 @@ string JoinSymbols(const vector<Symbol>& syms, const char* sep) {
 }
 
 vector<StringPiece> GetSymbolNames(std::function<bool(Var*)> const& filter) {
-  return g_symtab->GetSymbolNames(filter);
+  return g_symtab.GetSymbolNames(filter);
 }

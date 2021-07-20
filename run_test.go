@@ -55,7 +55,7 @@ var normalizeQuotes = normalization{
 
 var normalizeMakeLog = []normalization{
 	normalizeQuotes,
-	{regexp.MustCompile(`make(?:\[\d+\])?: (Entering|Leaving) directory[^\n]*`), ""},
+	{regexp.MustCompile(`make(?:\[\d+\])?: (Entering|Leaving) directory[^\n]*\n`), ""},
 	{regexp.MustCompile(`make(?:\[\d+\])?: `), ""},
 
 	// Normalizations for old/new GNU make.
@@ -72,6 +72,9 @@ var normalizeMakeLog = []normalization{
 	{regexp.MustCompile(`/bin/(ba)?sh: line 0: `), ""},
 	// Normalization for "include foo" with C++ kati
 	{regexp.MustCompile(`(: \S+: No such file or directory)\n\*\*\* No rule to make target "[^"]+".`), "$1"},
+	// GNU make 4.0 prints the file:line as part of the error message, e.g.:
+	//    *** [Makefile:4: target] Error 1
+	{regexp.MustCompile(`\[\S+:\d+: `), "["},
 }
 
 var normalizeMakeNinja = normalization{
