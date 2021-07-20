@@ -23,7 +23,6 @@
 #include <unistd.h>
 
 #include "affinity.h"
-#include "dep.h"
 #include "eval.h"
 #include "exec.h"
 #include "file.h"
@@ -50,22 +49,6 @@ extern "C" const char* __asan_default_options() {
   return "detect_leaks=0:allow_user_segv_handler=1";
 }
 
-static void Init() {
-  InitSymtab();
-  InitFuncTable();
-  InitDepNodePool();
-  InitParser();
-}
-
-static void Quit() {
-  ReportAllStats();
-
-  QuitParser();
-  QuitDepNodePool();
-  QuitFuncTable();
-  QuitSymtab();
-}
-
 static void ReadBootstrapMakefile(const vector<Symbol>& targets,
                                   vector<Stmt*>* stmts) {
   string bootstrap =
@@ -76,8 +59,8 @@ static void ReadBootstrapMakefile(const vector<Symbol>& targets,
        "CXX?=g++\n"
 #endif
        "AR?=ar\n"
-       // Pretend to be GNU make 3.81, for compatibility.
-       "MAKE_VERSION?=3.81\n"
+       // Pretend to be GNU make 4.2.1, for compatibility.
+       "MAKE_VERSION?=4.2.1\n"
        "KATI?=ckati\n"
        // Overwrite $SHELL environment variable.
        "SHELL=/bin/sh\n"
@@ -240,54 +223,53 @@ static int Run(const vector<Symbol>& targets,
 
   SetAffinityForSingleThread();
 
-  MakefileCacheManager* cache_mgr = NewMakefileCacheManager();
-  unique_ptr<Evaluator> ev(new Evaluator());
-  if (!ev->Start()) {
+  Evaluator ev;
+  if (!ev.Start()) {
     return 1;
   }
   Intern("MAKEFILE_LIST")
       .SetGlobalVar(new SimpleVar(StringPrintf(" %s", g_flags.makefile),
-                                  VarOrigin::FILE, ev->CurrentFrame(),
-                                  ev->loc()));
+                                  VarOrigin::FILE, ev.CurrentFrame(),
+                                  ev.loc()));
   for (char** p = environ; *p; p++) {
     SetVar(*p, VarOrigin::ENVIRONMENT, nullptr, Loc());
   }
-  SegfaultHandler segfault(ev.get());
+  SegfaultHandler segfault(&ev);
 
   vector<Stmt*> bootstrap_asts;
   ReadBootstrapMakefile(targets, &bootstrap_asts);
 
   {
-    ScopedFrame frame(ev->Enter(FrameType::PHASE, "*bootstrap*", Loc()));
-    ev->in_bootstrap();
+    ScopedFrame frame(ev.Enter(FrameType::PHASE, "*bootstrap*", Loc()));
+    ev.in_bootstrap();
     for (Stmt* stmt : bootstrap_asts) {
       LOG("%s", stmt->DebugString().c_str());
-      stmt->Eval(ev.get());
+      stmt->Eval(&ev);
     }
   }
 
   {
-    ScopedFrame frame(ev->Enter(FrameType::PHASE, "*command line*", Loc()));
-    ev->in_command_line();
+    ScopedFrame frame(ev.Enter(FrameType::PHASE, "*command line*", Loc()));
+    ev.in_command_line();
     for (StringPiece l : cl_vars) {
       vector<Stmt*> asts;
       Parse(Intern(l).str(), Loc("*bootstrap*", 0), &asts);
       CHECK(asts.size() == 1);
-      asts[0]->Eval(ev.get());
+      asts[0]->Eval(&ev);
     }
   }
-  ev->in_toplevel_makefile();
+  ev.in_toplevel_makefile();
 
   {
-    ScopedFrame eval_frame(ev->Enter(FrameType::PHASE, "*parse*", Loc()));
+    ScopedFrame eval_frame(ev.Enter(FrameType::PHASE, "*parse*", Loc()));
     ScopedTimeReporter tr("eval time");
 
-    ScopedFrame file_frame(
-        ev->Enter(FrameType::PARSE, g_flags.makefile, Loc()));
-    Makefile* mk = cache_mgr->ReadMakefile(g_flags.makefile);
-    for (Stmt* stmt : mk->stmts()) {
+    ScopedFrame file_frame(ev.Enter(FrameType::PARSE, g_flags.makefile, Loc()));
+    const Makefile& mk =
+        MakefileCacheManager::Get().ReadMakefile(g_flags.makefile);
+    for (Stmt* stmt : mk.stmts()) {
       LOG("%s", stmt->DebugString().c_str());
-      stmt->Eval(ev.get());
+      stmt->Eval(&ev);
     }
   }
 
@@ -297,34 +279,34 @@ static int Run(const vector<Symbol>& targets,
   }
 
   if (g_flags.dump_include_graph != nullptr) {
-    ev->DumpIncludeJSON(std::string(g_flags.dump_include_graph));
+    ev.DumpIncludeJSON(std::string(g_flags.dump_include_graph));
   }
 
   vector<NamedDepNode> nodes;
   {
     ScopedFrame frame(
-        ev->Enter(FrameType::PHASE, "*dependency analysis*", Loc()));
+        ev.Enter(FrameType::PHASE, "*dependency analysis*", Loc()));
     ScopedTimeReporter tr("make dep time");
-    MakeDep(ev.get(), ev->rules(), ev->rule_vars(), targets, &nodes);
+    MakeDep(&ev, ev.rules(), ev.rule_vars(), targets, &nodes);
   }
 
   if (g_flags.is_syntax_check_only)
     return 0;
 
   if (g_flags.generate_ninja) {
-    ScopedFrame frame(ev->Enter(FrameType::PHASE, "*ninja generation*", Loc()));
+    ScopedFrame frame(ev.Enter(FrameType::PHASE, "*ninja generation*", Loc()));
     ScopedTimeReporter tr("generate ninja time");
-    GenerateNinja(nodes, ev.get(), orig_args, start_time);
-    ev->DumpStackStats();
-    ev->Finish();
+    GenerateNinja(nodes, &ev, orig_args, start_time);
+    ev.DumpStackStats();
+    ev.Finish();
     return 0;
   }
 
-  for (const auto& p : ev->exports()) {
+  for (const auto& p : ev.exports()) {
     const Symbol name = p.first;
     if (p.second) {
-      Var* v = ev->LookupVar(name);
-      const string&& value = v->Eval(ev.get());
+      Var* v = ev.LookupVar(name);
+      const string&& value = v->Eval(&ev);
       LOG("setenv(%s, %s)", name.c_str(), value.c_str());
       setenv(name.c_str(), value.c_str(), 1);
     } else {
@@ -334,17 +316,16 @@ static int Run(const vector<Symbol>& targets,
   }
 
   {
-    ScopedFrame frame(ev->Enter(FrameType::PHASE, "*execution*", Loc()));
+    ScopedFrame frame(ev.Enter(FrameType::PHASE, "*execution*", Loc()));
     ScopedTimeReporter tr("exec time");
-    Exec(nodes, ev.get());
+    Exec(nodes, &ev);
   }
 
-  ev->DumpStackStats();
-  ev->Finish();
+  ev.DumpStackStats();
+  ev.Finish();
 
   for (Stmt* stmt : bootstrap_asts)
     delete stmt;
-  delete cache_mgr;
 
   return 0;
 }
@@ -376,7 +357,6 @@ int main(int argc, char* argv[]) {
     HandleRealpath(argc - 2, argv + 2);
     return 0;
   }
-  Init();
   string orig_args;
   for (int i = 0; i < argc; i++) {
     if (i)
@@ -384,6 +364,11 @@ int main(int argc, char* argv[]) {
     orig_args += argv[i];
   }
   g_flags.Parse(argc, argv);
+  if (g_flags.working_dir) {
+    int ret = chdir(g_flags.working_dir);
+    if (ret != 0)
+      ERROR("*** %s: %s", g_flags.working_dir, strerror(errno));
+  }
   FindFirstMakefie();
   if (g_flags.makefile == NULL)
     ERROR("*** No targets specified and no makefile found.");
@@ -391,6 +376,6 @@ int main(int argc, char* argv[]) {
   if (g_flags.use_find_emulator)
     InitFindEmulator();
   int r = Run(g_flags.targets, g_flags.cl_vars, orig_args);
-  Quit();
+  ReportAllStats();
   return r;
 }

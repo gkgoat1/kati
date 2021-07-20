@@ -26,15 +26,13 @@ class MakefileCacheManager {
  public:
   virtual ~MakefileCacheManager();
 
-  virtual Makefile* ReadMakefile(const string& filename) = 0;
+  virtual const Makefile& ReadMakefile(const string& filename) = 0;
   virtual void GetAllFilenames(unordered_set<string>* out) = 0;
 
-  static MakefileCacheManager* Get();
+  static MakefileCacheManager& Get();
 
  protected:
   MakefileCacheManager();
 };
-
-MakefileCacheManager* NewMakefileCacheManager();
 
 #endif  // FILE_CACHE_H_

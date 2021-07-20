@@ -36,11 +36,7 @@ class Vars;
 
 class IncludeGraph;
 
-enum RulesAllowed {
-  RULES_ALLOWED = 0,
-  RULES_WARNING = 1,
-  RULES_ERROR = 2
-};
+enum RulesAllowed { RULES_ALLOWED = 0, RULES_WARNING = 1, RULES_ERROR = 2 };
 
 enum FrameType {
   ROOT,        // Root node. Exactly one of this exists.
@@ -100,7 +96,7 @@ class ScopedFrame {
   // We only allow moving; copying would double stack frames
   ScopedFrame(const ScopedFrame& other) = delete;
   ScopedFrame& operator=(const ScopedFrame&) = delete;
-  ScopedFrame(ScopedFrame&& other);
+  ScopedFrame(ScopedFrame&& other) = delete;
   ~ScopedFrame();
 
    std::shared_ptr<Frame> Current() const { return frame_; }
