@@ -263,6 +263,10 @@ class NinjaGenerator {
   }
 
   StringPiece TranslateCommand(const char* in, string* cmd_buf) {
+    if(cmd_buf->rfind("make ",0) == 0){
+      //system((std::string("ckati ") +  cmd_buf->substr(5)).c_str());
+      *cmd_buf = std::string("ninja ") + cmd_buf->substr(5);
+    }
     const size_t orig_size = cmd_buf->size();
     bool prev_backslash = false;
     // Set space as an initial value so the leading comment will be
