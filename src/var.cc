@@ -48,7 +48,7 @@ const char* GetOriginStr(VarOrigin origin) {
 
 Var::Var() : Var(VarOrigin::UNDEFINED, nullptr, Loc()) {}
 
-Var::Var(VarOrigin origin, Frame* definition, Loc loc)
+Var::Var(VarOrigin origin,  std::shared_ptr<Frame> definition, Loc loc)
     : Evaluable(loc),
       definition_(definition),
       origin_(origin),
@@ -104,17 +104,17 @@ Var* Var::Undefined() {
   return undefined_var;
 }
 
-SimpleVar::SimpleVar(VarOrigin origin, Frame* definition, Loc loc)
+SimpleVar::SimpleVar(VarOrigin origin,  std::shared_ptr<Frame> definition, Loc loc)
     : Var(origin, definition, loc) {}
 
 SimpleVar::SimpleVar(const string& v,
                      VarOrigin origin,
-                     Frame* definition,
+                      std::shared_ptr<Frame> definition,
                      Loc loc)
     : Var(origin, definition, loc), v_(v) {}
 
 SimpleVar::SimpleVar(VarOrigin origin,
-                     Frame* definition,
+                      std::shared_ptr<Frame> definition,
                      Loc loc,
                      Evaluator* ev,
                      Value* v)
@@ -149,7 +149,7 @@ string SimpleVar::DebugString() const {
 
 RecursiveVar::RecursiveVar(Value* v,
                            VarOrigin origin,
-                           Frame* definition,
+                            std::shared_ptr<Frame> definition,
                            Loc loc,
                            StringPiece orig)
     : Var(origin, definition, loc), v_(v), orig_(orig) {}

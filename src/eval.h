@@ -57,44 +57,57 @@ enum FrameType {
 class Frame {
  public:
   // for the top-level Makefile
-  Frame(FrameType type, Frame* parent, Loc loc, const std::string& name);
+  Frame(FrameType type, std::shared_ptr<Frame> parent, Loc loc, const std::string& name);
 
   ~Frame();
 
   FrameType Type() const { return type_; }
-  Frame* Parent() const { return parent_; }
+   std::shared_ptr<Frame> Parent() const { return parent_; }
   const string& Name() const { return name_; }
   const Loc& Location() const { return location_; }
-  const std::vector<std::unique_ptr<Frame>>& Children() const {
+  const std::vector< std::shared_ptr<Frame>>& Children() const {
     return children_;
   }
-
+  inline FILE& Src(){
+    return *src;
+  }
+  inline FILE*& Target(){
+    return target;
+  }
   void PrintJSONTrace(FILE* f, int indent) const;
 
-  void Add(std::unique_ptr<Frame> child);
+  void Add( std::shared_ptr<Frame> child);
 
  private:
+ FILE *src;FILE *target;
   FrameType type_;
-  Frame* parent_;
+  std::shared_ptr<Frame> parent_;
   std::string name_;
   Loc location_;
-  std::vector<std::unique_ptr<Frame>> children_;
+  std::vector< std::shared_ptr<Frame>> children_;
 };
+class SubFrame: Frame{
+  std::string curdir;
 
+  public:
+  inline std::string& Curdir(){
+    return curdir;
+  }
+};
 class ScopedFrame {
  public:
-  ScopedFrame(Evaluator* ev, Frame* frame);
+  ScopedFrame(Evaluator* ev,  std::shared_ptr<Frame> frame);
   // We only allow moving; copying would double stack frames
   ScopedFrame(const ScopedFrame& other) = delete;
   ScopedFrame& operator=(const ScopedFrame&) = delete;
   ScopedFrame(ScopedFrame&& other);
   ~ScopedFrame();
 
-  Frame* Current() const { return frame_; }
+   std::shared_ptr<Frame> Current() const { return frame_; }
 
  private:
   Evaluator* ev_;
-  Frame* frame_;
+   std::shared_ptr<Frame> frame_;
 };
 
 class IncludeGraphNode {
@@ -184,7 +197,7 @@ class Evaluator {
   void DecrementEvalDepth() { eval_depth_--; }
 
   ScopedFrame Enter(FrameType frame_type, const string& name, Loc loc);
-  Frame* CurrentFrame() const {
+   std::shared_ptr<Frame> CurrentFrame() const {
     return stack_.empty() ? nullptr : stack_.back();
   };
 
@@ -255,7 +268,7 @@ class Evaluator {
   bool is_commandline_;
 
   bool trace_;
-  std::vector<Frame*> stack_;
+  std::vector< std::shared_ptr<Frame>> stack_;
   FILE* assignment_tracefile_;
   long int assignment_count_;
 

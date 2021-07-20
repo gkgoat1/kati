@@ -53,7 +53,7 @@ class Var : public Evaluable {
   virtual const char* Flavor() const = 0;
 
   VarOrigin Origin() const { return origin_; }
-  Frame* Definition() const { return definition_; }
+   std::shared_ptr<Frame> Definition() const { return definition_; }
 
   virtual bool IsDefined() const { return true; }
 
@@ -87,9 +87,9 @@ class Var : public Evaluable {
 
  protected:
   Var();
-  Var(VarOrigin origin, Frame* definition, Loc loc);
+  Var(VarOrigin origin,  std::shared_ptr<Frame> definition, Loc loc);
 
-  Frame* definition_;
+   std::shared_ptr<Frame> definition_;
 
  private:
   const VarOrigin origin_;
@@ -107,10 +107,10 @@ class Var : public Evaluable {
 
 class SimpleVar : public Var {
  public:
-  explicit SimpleVar(VarOrigin origin, Frame* definition, Loc loc);
-  SimpleVar(const string& v, VarOrigin origin, Frame* definition, Loc loc);
+  explicit SimpleVar(VarOrigin origin,  std::shared_ptr<Frame> definition, Loc loc);
+  SimpleVar(const string& v, VarOrigin origin,  std::shared_ptr<Frame> definition, Loc loc);
   SimpleVar(VarOrigin origin,
-            Frame* definition,
+             std::shared_ptr<Frame> definition,
             Loc loc,
             Evaluator* ev,
             Value* v);
@@ -134,7 +134,7 @@ class RecursiveVar : public Var {
  public:
   RecursiveVar(Value* v,
                VarOrigin origin,
-               Frame* definition,
+                std::shared_ptr<Frame> definition,
                Loc loc,
                StringPiece orig);
 

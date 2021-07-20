@@ -20,6 +20,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <string.h>
+#include <memory>
 
 #include "expr.h"
 #include "file.h"
@@ -33,14 +34,14 @@
 #include "symtab.h"
 #include "var.h"
 
-Frame::Frame(FrameType type, Frame* parent, Loc loc, const std::string& name)
+Frame::Frame(FrameType type,  std::shared_ptr<Frame> parent, Loc loc, const std::string& name)
     : type_(type), parent_(parent), name_(name), location_(loc) {
   CHECK((parent == nullptr) == (type == FrameType::ROOT));
 }
 
 Frame::~Frame() {}
 
-void Frame::Add(std::unique_ptr<Frame> child) {
+void Frame::Add( std::shared_ptr<Frame> child) {
   children_.push_back(std::move(child));
 }
 
@@ -63,12 +64,12 @@ void Frame::PrintJSONTrace(FILE* f, int indent) const {
   parent_->PrintJSONTrace(f, indent);
 }
 
-ScopedFrame::ScopedFrame(Evaluator* ev, Frame* frame) : ev_(ev), frame_(frame) {
+ScopedFrame::ScopedFrame(Evaluator* ev,  std::shared_ptr<Frame> frame) : ev_(ev), frame_(frame) {
   if (!ev->trace_) {
     return;
   }
 
-  ev_->stack_.back()->Add(std::unique_ptr<Frame>(frame));
+  ev_->stack_.back()->Add(frame);
   ev_->stack_.push_back(frame);
 }
 
@@ -175,7 +176,7 @@ Evaluator::Evaluator()
   lowest_stack_ = (char*)stack_addr_ + stack_size_;
   LOG_STAT("Stack size: %zd bytes", stack_size_);
 
-  stack_.push_back(new Frame(FrameType::ROOT, nullptr, Loc(), "*root*"));
+  stack_.push_back(std::make_shared<Frame>(FrameType::ROOT, nullptr, Loc(), "*root*"));
 
   trace_ = g_flags.dump_variable_assignment_trace || g_flags.dump_include_graph;
   assignment_tracefile_ = nullptr;
@@ -244,7 +245,7 @@ Var* Evaluator::EvalRHS(Symbol lhs,
                         bool is_override,
                         bool* needs_assign) {
   VarOrigin origin;
-  Frame* current_frame = nullptr;
+   std::shared_ptr<Frame> current_frame = nullptr;
 
   if (is_bootstrap_) {
     origin = VarOrigin::DEFAULT;
@@ -818,7 +819,7 @@ ScopedFrame Evaluator::Enter(FrameType frame_type,
     return ScopedFrame(this, nullptr);
   }
 
-  Frame* frame = new Frame(frame_type, stack_.back(), loc, name);
+   std::shared_ptr<Frame> frame = std::make_shared<Frame>(frame_type, stack_.back(), loc, name);
   return ScopedFrame(this, frame);
 }
 
@@ -868,7 +869,7 @@ void Evaluator::DumpStackStats() const {
 
 void Evaluator::DumpIncludeJSON(const string& filename) const {
   IncludeGraph graph;
-  graph.MergeTreeNode(stack_.front());
+  graph.MergeTreeNode(&*stack_.front());
   FILE* jsonfile;
   if (filename == "-") {
     jsonfile = stdout;
